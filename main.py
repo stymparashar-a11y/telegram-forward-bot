@@ -17,7 +17,7 @@ from telegram.ext import (
 # BOT TOKEN
 BOT_TOKEN = "8003720292:AAH9EN5D57inOquULQCSj5kI4Uc-6iFqvIw"
 
-# BATCH list
+# Batch data
 BATCHES = {
     "batch_1": {"name": "Parishram 2025", "db_channel": -1003048644664, "main_channel": "@parishram_2025_1_0"},
     "batch_2": {"name": "Parishram 2026", "db_channel": -1003048644664, "main_channel": "@parishram_2026_1_0"},
@@ -26,13 +26,12 @@ BATCHES = {
     "batch_5": {"name": "Arjuna NEET 2026", "db_channel": -1003251243138, "main_channel": "@arjuna_neet_2026_1_0"},
 }
 
-# TRACK updates
 updated_batches = {}
 
 logging.basicConfig(level=logging.INFO)
 
 
-# --------------- HELPERS ------------------
+# ------------------------ HELPERS ------------------------
 def today():
     return datetime.date.today().isoformat()
 
@@ -44,31 +43,31 @@ def mark_updated(batch_id):
 
 
 def is_sending(context):
-    return context.application_data.get("sending", False)
+    return context.bot_data.get("sending", False)
 
 
 def set_sending(context, value):
-    context.application_data["sending"] = value
+    context.bot_data["sending"] = value
 
 
-# --------------- UI ELEMENTS ------------------
+# ------------------------ UI ------------------------
 async def show_batches(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    keyboard = []
-    done_today = updated_batches.get(today(), [])
+    kb = []
+    done = updated_batches.get(today(), [])
 
-    for batch_id, info in BATCHES.items():
+    for bid, info in BATCHES.items():
         name = info["name"]
-        if batch_id in done_today:
+        if bid in done:
             name += " ✅"
-        keyboard.append([InlineKeyboardButton(name, callback_data=batch_id)])
+        kb.append([InlineKeyboardButton(name, callback_data=bid)])
 
     await update.message.reply_text(
         "📦 Select your batch:",
-        reply_markup=InlineKeyboardMarkup(keyboard)
+        reply_markup=InlineKeyboardMarkup(kb)
     )
 
 
-# --------------- COMMAND HANDLERS ------------------
+# ------------------------ COMMANDS ------------------------
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if is_sending(context):
         await update.message.reply_text("⏳ Upload running. Please wait.")
@@ -80,16 +79,16 @@ async def statistic(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await show_batches(update, context)
 
 
-# --------------- CALLBACKS ------------------
+# ------------------------ CALLBACK BUTTONS ------------------------
 async def batch_select(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
+    q = update.callback_query
+    await q.answer()
 
     if is_sending(context):
-        await query.answer("Upload running. Wait.", show_alert=True)
+        await q.answer("Upload already running. Please wait.", show_alert=True)
         return
 
-    batch_id = query.data
+    batch_id = q.data
     context.user_data["batch_id"] = batch_id
 
     kb = [
@@ -99,10 +98,10 @@ async def batch_select(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ]
     ]
 
-    await query.edit_message_text(
+    await q.edit_message_text(
         f"{BATCHES[batch_id]['name']} selected.\nNow send range like `10-20`.",
-        reply_markup=InlineKeyboardMarkup(kb),
-        parse_mode="Markdown"
+        parse_mode="Markdown",
+        reply_markup=InlineKeyboardMarkup(kb)
     )
 
 
@@ -120,51 +119,51 @@ async def update_batch(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["batch_id"] = batch_id
 
     await q.edit_message_text(
-        "Send video ID range in format:\n`10-35`",
+        "Send video ID range like:\n`10-35`",
         parse_mode="Markdown"
     )
 
 
-# --------------- MAIN UPLOAD PROCESS ------------------
+# ------------------------ MAIN UPLOAD LOGIC ------------------------
 async def receive_range(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if "batch_id" not in context.user_data:
         return
 
     if is_sending(context):
-        await update.message.reply_text("⏳ Please wait, upload already running.")
+        await update.message.reply_text("⏳ Upload already in progress.")
         return
 
     try:
         start_id, end_id = map(int, update.message.text.strip().split("-"))
     except:
-        await update.message.reply_text("❌ Wrong format.\nUse `10-20`")
+        await update.message.reply_text("❌ Wrong format. Use `10-20`")
         return
 
     batch_id = context.user_data["batch_id"]
     db = BATCHES[batch_id]["db_channel"]
     chan = BATCHES[batch_id]["main_channel"]
 
-    message_ids = list(range(start_id, end_id + 1))
-    total = len(message_ids)
+    ids = list(range(start_id, end_id + 1))
+    total = len(ids)
 
     set_sending(context, True)
 
     await update.message.reply_text(
-        f"🚀 Upload started for {total} videos.\n20 per batch. 1-minute gap.",
+        f"🚀 Starting upload of {total} videos.\n20 per batch, 1-min wait.",
         parse_mode="Markdown"
     )
 
-    try:
-        sent = 0
-        BATCH_SIZE = 20
-        batch_num = 0
+    sent = 0
+    BATCH_SIZE = 20
+    batch_no = 0
 
+    try:
         for i in range(0, total, BATCH_SIZE):
-            batch_num += 1
-            chunk = message_ids[i:i + BATCH_SIZE]
+            batch_no += 1
+            chunk = ids[i:i + BATCH_SIZE]
 
             await update.message.reply_text(
-                f"📦 Sending batch {batch_num}: {chunk[0]}—{chunk[-1]}"
+                f"📦 Sending batch {batch_no}: {chunk[0]}–{chunk[-1]}"
             )
 
             for mid in chunk:
@@ -176,7 +175,7 @@ async def receive_range(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     )
                     sent += 1
                 except Exception as e:
-                    logging.warning(f"Failed: {mid} — {e}")
+                    logging.warning(f"Failed message {mid}: {e}")
 
             if i + BATCH_SIZE < total:
                 await update.message.reply_text("⏳ Waiting 60 seconds…")
@@ -185,15 +184,20 @@ async def receive_range(update: Update, context: ContextTypes.DEFAULT_TYPE):
         mark_updated(batch_id)
 
         await update.message.reply_text(
-            f"🎉 Successfully sent {sent} videos to {BATCHES[batch_id]['name']}!",
+            f"🎉 Completed! Sent {sent} videos to {BATCHES[batch_id]['name']}.",
             parse_mode="Markdown"
+        )
+
+        await context.bot.send_sticker(
+            update.effective_chat.id,
+            "CAACAgUAAxkBAAIBQ2S9v9x3t3YcAAHcbShc7_wAAUmHoAAC6gIAAj-VyFYwU6oMnb4djTQE"
         )
 
     finally:
         set_sending(context, False)
 
 
-# --------------- MAIN ENTRY ------------------
+# ------------------------ MAIN ------------------------
 def main():
     app = Application.builder().token(BOT_TOKEN).build()
 
