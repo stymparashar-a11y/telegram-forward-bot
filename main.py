@@ -26,8 +26,13 @@ BATCHES = {
     },
     "batch_4": {
         "name": "Lakshya JEE 2026",
-        "db_channel": -1002951192357,
+        "db_channel": -1003465671248,
         "main_channel": -1002921200840,
+    },
+    "batch_4": {
+        "name": "Arjuna NEET 2026",
+        "db_channel": -1003251243138,
+        "main_channel": "@arjuna_neet_2026_1_0",
     },
 }
 
